@@ -47,7 +47,7 @@ struct StripDiacritics
 		if (m_converter == nullptr)
 		{
 			icu::ErrorCode result;
-			// using 'Latin' instead of 'NFD; [:M:] Remove; NFC' properly
+			// using 'Latin; ASCII' instead of 'NFD; [:M:] Remove; NFC' properly
 			// converts 'ł' to 'l'. As a bonus, it converts greek and other
 			// scripts to latin
 			m_converter = icu::Transliterator::createInstance(
