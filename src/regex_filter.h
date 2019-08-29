@@ -47,8 +47,11 @@ struct StripDiacritics
 		if (m_converter == nullptr)
 		{
 			icu::ErrorCode result;
+			// using 'Latin' instead of 'NFD; [:M:] Remove; NFC' properly
+			// converts 'ł' to 'l'. As a bonus, it converts greek and other
+			// scripts to latin
 			m_converter = icu::Transliterator::createInstance(
-				"NFD; [:M:] Remove; NFC", UTRANS_FORWARD, result);
+				"Russian-Latin/BGN; Latin; ASCII", UTRANS_FORWARD, result);
 			if (result.isFailure())
 				throw std::runtime_error(
 					"instantiation of transliterator instance failed with "
@@ -99,6 +102,9 @@ inline bool search(const std::basic_string<CharT> &s,
 #ifdef BOOST_REGEX_ICU
 		if (ignore_diacritics)
 		{
+			// use regular search first, without this 'ć' wouldn't match
+			// anything as it 'ć' would be converted to 'c'
+			if (boost::u32regex_search(s, rx)) return true;
 			auto us = icu::UnicodeString::fromUTF8(
 				icu::StringPiece(convertString<char, CharT>::apply(s)));
 			StripDiacritics::convert(us);
