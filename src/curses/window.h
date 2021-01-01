@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -218,6 +218,10 @@ void disable();
 /// Initializes curses screen and sets some additional attributes
 /// @param enable_colors enables colors
 void initScreen(bool enable_colors, bool enable_mouse);
+
+// Get the maximum supported color index (but only once initScreen() has been
+// successfully called). This might be less than the advertised COLORS.
+int colorCount();
 
 /// Pauses the screen (e.g. for running an external command)
 void pauseScreen();

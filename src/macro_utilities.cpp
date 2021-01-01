@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -87,11 +87,37 @@ RunExternalCommand::RunExternalCommand(std::string &&command)
 
 void RunExternalCommand::run()
 {
-	GNUC_UNUSED int res;
+	runExternalCommandNoOutput(m_command, false);
+}
 
+RunExternalConsoleCommand::RunExternalConsoleCommand(std::string &&command)
+	: BaseAction(Type::MacroUtility, "run_external_console_command")
+	, m_command(std::move(command))
+{
+	m_name += " \"";
+	m_name += m_command;
+	m_name += "\"";
+}
+
+void RunExternalConsoleCommand::run()
+{
+	runExternalConsoleCommand(m_command);
+}
+
+}
+
+void runExternalConsoleCommand(const std::string &cmd)
+{
 	NC::pauseScreen();
-	res = std::system(m_command.c_str());
+	std::system(cmd.c_str());
 	NC::unpauseScreen();
 }
+
+void runExternalCommandNoOutput(const std::string &cmd, bool block)
+{
+	if (block)
+		std::system((cmd + " >/dev/null 2>&1").c_str());
+	else
+		std::system(("nohup " + cmd + " >/dev/null 2>&1 &").c_str());
 
 }

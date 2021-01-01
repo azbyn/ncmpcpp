@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -63,20 +63,24 @@ std::string xdg_config_home()
 void expand_home(std::string &path)
 {
 	assert(env_home != nullptr);
-	if (!path.empty() && path[0] == '~')
-		path.replace(0, 1, env_home);
+	if (!path.empty())
+	{
+		size_t i = path.find("~");
+		if (i != std::string::npos && (i == 0 || path[i - 1] == '@'))
+			path.replace(i, 1, env_home);
+	}
 }
 
 bool configure(int argc, char **argv)
 {
 	const std::vector<std::string> default_config_paths = {
-		"~/.ncmpcpp/config",
-		xdg_config_home() + "ncmpcpp/config"
+		xdg_config_home() + "ncmpcpp/config",
+		"~/.ncmpcpp/config"
 	};
 
 	const std::vector<std::string> default_bindings_paths = {
-		"~/.ncmpcpp/bindings",
-		xdg_config_home() + "ncmpcpp/bindings"
+		xdg_config_home() + "ncmpcpp/bindings",
+		"~/.ncmpcpp/bindings"
 	};
 
 	std::vector<std::string> bindings_paths;
@@ -152,16 +156,16 @@ bool configure(int argc, char **argv)
 		if (vm.count("test-lyrics-fetchers"))
 		{
 			std::vector<std::tuple<std::string, std::string, std::string>> fetcher_data = {
-				std::make_tuple("lyricwiki", "rihanna", "umbrella"),
 				std::make_tuple("azlyrics", "rihanna", "umbrella"),
 				std::make_tuple("genius", "rihanna", "umbrella"),
+				std::make_tuple("musixmatch", "rihanna", "umbrella"),
 				std::make_tuple("sing365", "rihanna", "umbrella"),
-				std::make_tuple("lyricsmania", "rihanna", "umbrella"),
 				std::make_tuple("metrolyrics", "rihanna", "umbrella"),
 				std::make_tuple("justsomelyrics", "rihanna", "umbrella"),
 				std::make_tuple("jahlyrics", "sean kingston", "dry your eyes"),
 				std::make_tuple("plyrics", "offspring", "genocide"),
 				std::make_tuple("tekstowo", "rihanna", "umbrella"),
+				std::make_tuple("zeneszoveg", "rihanna", "umbrella"),
 			};
 			for (auto &data : fetcher_data)
 			{
@@ -198,7 +202,7 @@ bool configure(int argc, char **argv)
 		Bindings.generateDefaults();
 
 		// create directories
-		boost::filesystem::create_directory(Config.ncmpcpp_directory);
+		boost::filesystem::create_directories(Config.ncmpcpp_directory);
 		boost::filesystem::create_directory(Config.lyrics_directory);
 
 		// try to get MPD connection details from environment variables

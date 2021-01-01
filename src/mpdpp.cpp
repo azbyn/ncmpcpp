@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <map>
+#include <boost/regex.hpp>
 
 #include "charset.h"
 #include "mpdpp.h"
@@ -213,7 +214,11 @@ Status Connection::getStatus()
 void Connection::UpdateDirectory(const std::string &path)
 {
 	prechecksNoCommandsList();
-	mpd_run_update(m_connection.get(), path.c_str());
+	// Use update as mpd_run_update doesn't call mpd_response_finish if the id
+	// returned from mpd_recv_update_id is 0 which breaks mopidy.
+	mpd_send_update(m_connection.get(), path.c_str());
+	mpd_recv_update_id(m_connection.get());
+	mpd_response_finish(m_connection.get());
 	checkErrors();
 }
 
@@ -562,16 +567,18 @@ int Connection::AddSong(const Song &s, int pos)
 	return AddSong((!s.isFromDatabase() ? "file://" : "") + s.getURI(), pos);
 }
 
-void Connection::Add(const std::string &path)
+bool Connection::Add(const std::string &path)
 {
+	bool result;
 	prechecks();
 	if (m_command_list_active)
-		mpd_send_add(m_connection.get(), path.c_str());
+		result = mpd_send_add(m_connection.get(), path.c_str());
 	else
 	{
-		mpd_run_add(m_connection.get(), path.c_str());
+		result = mpd_run_add(m_connection.get(), path.c_str());
 		checkErrors();
 	}
+	return result;
 }
 
 bool Connection::AddRandomTag(mpd_tag_type tag, size_t number, std::mt19937 &rng)
@@ -601,7 +608,7 @@ bool Connection::AddRandomTag(mpd_tag_type tag, size_t number, std::mt19937 &rng
 	return true;
 }
 
-bool Connection::AddRandomSongs(size_t number, std::mt19937 &rng)
+bool Connection::AddRandomSongs(size_t number, const std::string &random_exclude_pattern, std::mt19937 &rng)
 {
 	prechecksNoCommandsList();
 	std::vector<std::string> files;
@@ -625,8 +632,13 @@ bool Connection::AddRandomSongs(size_t number, std::mt19937 &rng)
 		std::shuffle(files.begin(), files.end(), rng);
 		StartCommandsList();
 		auto it = files.begin();
-		for (size_t i = 0; i < number && it != files.end(); ++i, ++it)
-			AddSong(*it);
+		boost::regex re(random_exclude_pattern);
+		for (size_t i = 0; i < number && it != files.end(); ++it) {
+			if (random_exclude_pattern.empty() || !boost::regex_match((*it), re)) {
+				AddSong(*it);
+				i++;
+			}
+		}
 		CommitCommandsList();
 	}
 	return true;
@@ -636,6 +648,17 @@ void Connection::Delete(unsigned pos)
 {
 	prechecks();
 	mpd_send_delete(m_connection.get(), pos);
+	if (!m_command_list_active)
+	{
+		mpd_response_finish(m_connection.get());
+		checkErrors();
+	}
+}
+
+void Connection::DeleteRange(unsigned begin, unsigned end)
+{
+	prechecks();
+	mpd_send_delete_range(m_connection.get(), begin, end);
 	if (!m_command_list_active)
 	{
 		mpd_response_finish(m_connection.get());
@@ -679,11 +702,12 @@ void Connection::DeletePlaylist(const std::string &name)
 	checkErrors();
 }
 
-void Connection::LoadPlaylist(const std::string &name)
+bool Connection::LoadPlaylist(const std::string &name)
 {
 	prechecksNoCommandsList();
-	mpd_run_load(m_connection.get(), name.c_str());
+	bool result = mpd_run_load(m_connection.get(), name.c_str());
 	checkErrors();
+	return result;
 }
 
 void Connection::SavePlaylist(const std::string &name)

@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -52,7 +52,7 @@ struct Column
 struct Configuration
 {
 	Configuration()
-	: playlist_disable_highlight_delay(0), visualizer_sync_interval(0)
+	: playlist_disable_highlight_delay(0)
 	{ }
 
 	bool read(const std::vector<std::string> &config_paths, bool ignore_errors);
@@ -61,7 +61,8 @@ struct Configuration
 	std::string lyrics_directory;
 
 	std::string mpd_music_dir;
-	std::string visualizer_fifo_path;
+	std::string visualizer_fifo_path; // deprecated
+	std::string visualizer_data_source;
 	std::string visualizer_output_name;
 	std::string empty_tag;
 
@@ -82,6 +83,13 @@ struct Configuration
 	std::string lastfm_preferred_language;
 	std::wstring progressbar;
 	std::wstring visualizer_chars;
+	size_t visualizer_fps;
+	bool visualizer_autoscale;
+	bool visualizer_spectrum_smooth_look;
+	uint32_t visualizer_spectrum_dft_size;
+	double visualizer_spectrum_gain;
+	double visualizer_spectrum_hz_min;
+	double visualizer_spectrum_hz_max;
 
 	std::string pattern;
 
@@ -140,6 +148,7 @@ struct Configuration
 	bool header_visibility;
 	bool header_text_scrolling;
 	bool statusbar_visibility;
+	bool connected_message_on_startup;
 	bool titles_visibility;
 	bool centered_cursor;
 	bool screen_switcher_previous;
@@ -167,6 +176,7 @@ struct Configuration
 	bool visualizer_in_stereo;
 	bool data_fetching_delay;
 	bool media_library_sort_by_mtime;
+	bool media_lib_hide_album_dates;
 	bool tag_editor_extended_numeration;
 	bool discard_colors_if_item_is_selected;
 	bool store_lyrics_in_song_dir;
@@ -188,7 +198,6 @@ struct Configuration
 	boost::regex::flag_type regex_type;
 
 	boost::posix_time::seconds playlist_disable_highlight_delay;
-	boost::posix_time::seconds visualizer_sync_interval;
 
 	double locked_screen_width_part;
 
@@ -205,6 +214,7 @@ struct Configuration
 	boost::optional<ScreenType> startup_slave_screen_type;
 	std::vector<ScreenType> screen_sequence;
 
+	std::string random_exclude_pattern;
 	SortMode browser_sort_mode;
 
 	LyricsFetchers lyrics_fetchers;

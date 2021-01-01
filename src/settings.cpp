@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -196,7 +196,8 @@ NC::Buffer buffer_wlength(const NC::Buffer *target,
 		return *target;
 }
 
-void deprecated(const char *option, double version_removal, const std::string &advice)
+void deprecated(const char *option, const char *version_removal,
+                const std::string &advice)
 {
 	std::cerr << "WARNING: Variable '" << option
 	          << "' is deprecated and will be removed in "
@@ -213,57 +214,28 @@ bool Configuration::read(const std::vector<std::string> &config_paths, bool igno
 	option_parser p;
 
 	// Deprecated options.
-	p.add<void>("visualizer_sample_multiplier", nullptr, "", [](std::string v) {
-			if (!v.empty())
-				deprecated(
-					"visualizer_sample_multiplier",
-					0.9,
-					"visualizer scales automatically");
-		});
-	p.add<void>("progressbar_boldness", nullptr, "", [](std::string v) {
-			if (!v.empty())
-				deprecated(
-					"progressbar_boldness",
-					0.9,
-					"use extended progressbar_color and progressbar_elapsed_color instead");
-		});
-
-	p.add<void>("main_window_highlight_color", nullptr, "", [this](std::string v) {
-			if (!v.empty())
-			{
-				const std::string current_item_prefix_str = "$(" + v + ")$r";
-				const std::string current_item_suffix_str = "$/r$(end)";
-				current_item_prefix = buffer_wlength(
-					nullptr,
-					current_item_prefix_length,
-					current_item_prefix_str);
-				current_item_suffix = buffer_wlength(
-					nullptr,
-					current_item_suffix_length,
-					current_item_suffix_str);
-				deprecated(
-					"main_window_highlight_color",
-					0.9,
-					"set current_item_prefix = \""
-					+ current_item_prefix_str
-					+ "\" and current_item_suffix = \""
-					+ current_item_suffix_str
-					+ "\" to preserve current behavior");
-			};
-		});
-	p.add<void>("active_column_color", nullptr, "", [this](std::string v) {
-			if (!v.empty())
-			{
-				deprecated(
-					"active_column_color",
-					0.9,
-					"replaced by current_item_inactive_column_prefix"
-					" and current_item_inactive_column_suffix");
-			};
-		});
+	p.add("visualizer_fifo_path", &visualizer_fifo_path, "", [](std::string v) {
+		if (!v.empty())
+		{
+			deprecated("visualizer_fifo_path",
+			           "0.10",
+			           "replaced by visualizer_data_source");
+		}
+		return adjust_path(v);
+	});
+	p.add<void>("visualizer_sync_interval", nullptr, "", [](std::string v) {
+		if (!v.empty())
+		{
+			deprecated("visualizer_sync_interval",
+			           "0.10",
+			           "set 'buffer_time' parameter of your MPD audio output to '100000' "
+			           "(100ms) or lower if you experience synchronization issues "
+			           "between audio and visualization");
+		}
+	});
 
 	// keep the same order of variables as in configuration file
-	p.add("ncmpcpp_directory", &ncmpcpp_directory, "~/.ncmpcpp/", adjust_directory);
+	p.add("ncmpcpp_directory", &ncmpcpp_directory, "~/.config/ncmpcpp/", adjust_directory);
 	p.add("lyrics_directory", &lyrics_directory, "~/.lyrics/", adjust_directory);
 	p.add<void>("mpd_host", nullptr, "localhost", [](std::string host) {
 			expand_home(host);
@@ -275,21 +247,54 @@ bool Configuration::read(const std::vector<std::string> &config_paths, bool igno
 	p.add("mpd_music_dir", &mpd_music_dir, "~/music", adjust_directory);
 	p.add("mpd_connection_timeout", &mpd_connection_timeout, "5");
 	p.add("mpd_crossfade_time", &crossfade_time, "5");
-	p.add("visualizer_fifo_path", &visualizer_fifo_path, "/tmp/mpd.fifo", adjust_path);
+	p.add("random_exclude_pattern", &random_exclude_pattern, "");
+	p.add("visualizer_data_source", &visualizer_data_source, "/tmp/mpd.fifo", adjust_path);
 	p.add("visualizer_output_name", &visualizer_output_name, "Visualizer feed");
 	p.add("visualizer_in_stereo", &visualizer_in_stereo, "yes", yes_no);
-	p.add("visualizer_sync_interval", &visualizer_sync_interval, "30",
-	      [](std::string v) {
-		      unsigned sync_interval = verbose_lexical_cast<unsigned>(v);
-		      lowerBoundCheck<unsigned>(sync_interval, 10);
-		      return boost::posix_time::seconds(sync_interval);
-	});
-	p.add("visualizer_type", &visualizer_type, "wave");
+	p.add("visualizer_type", &visualizer_type,
+#ifdef HAVE_FFTW3_H
+	      "spectrum"
+#else
+	      "ellipse"
+#endif
+		);
 	p.add("visualizer_look", &visualizer_chars, "●▮", [](std::string s) {
 			auto result = ToWString(std::move(s));
 			boundsCheck<std::wstring::size_type>(result.size(), 2, 2);
 			return result;
 	});
+	p.add("visualizer_fps", &visualizer_fps,
+			"60", [](std::string v) {
+			uint32_t result = verbose_lexical_cast<uint32_t>(v);
+			boundsCheck<uint32_t>(result, 30, 144);
+			return result;
+			});
+	p.add("visualizer_autoscale", &visualizer_autoscale, "no", yes_no);
+	p.add("visualizer_spectrum_smooth_look", &visualizer_spectrum_smooth_look, "yes", yes_no);
+	p.add("visualizer_spectrum_dft_size", &visualizer_spectrum_dft_size,
+			"2", [](std::string v) {
+			auto result = verbose_lexical_cast<size_t>(v);
+			boundsCheck<size_t>(result, 1, 5);
+			return result;
+			});
+	p.add("visualizer_spectrum_gain", &visualizer_spectrum_gain,
+			"10", [](std::string v) {
+			auto result = verbose_lexical_cast<double>(v);
+			boundsCheck<double>(result, 0, 100);
+			return result;
+			});
+	p.add("visualizer_spectrum_hz_min", &visualizer_spectrum_hz_min,
+			"20", [](std::string v) {
+			auto result = verbose_lexical_cast<double>(v);
+			lowerBoundCheck<double>(result, 1);
+			return result;
+			});
+	p.add("visualizer_spectrum_hz_max", &visualizer_spectrum_hz_max,
+			"20000", [](std::string v) {
+			auto result = verbose_lexical_cast<double>(v);
+			lowerBoundCheck<double>(result, Config.visualizer_spectrum_hz_min+1);
+			return result;
+			});
 	p.add("visualizer_color", &visualizer_colors,
 	      "blue, cyan, green, yellow, magenta, red", list_of<NC::FormattedColor>);
 	p.add("system_encoding", &system_encoding, "", [](std::string encoding) {
@@ -310,7 +315,7 @@ bool Configuration::read(const std::vector<std::string> &config_paths, bool igno
 	      });
 	p.add("message_delay_time", &message_delay_time, "5");
 	p.add("song_list_format", &song_list_format,
-	      "{%a - }{%t}|{$8%f$9}$R{$3(%l)$9}", [](std::string v) {
+	      "{%a - }{%t}|{$8%f$9}$R{$3%l$9}", [](std::string v) {
 		      return Format::parse(v);
 	      });
 	p.add("song_status_format", &song_status_format,
@@ -382,9 +387,18 @@ bool Configuration::read(const std::vector<std::string> &config_paths, bool igno
 	      "{%a - }{%t}|{%f}", [](std::string v) {
 		      return Format::parse(v, Format::Flags::Tag);
 	      });
-	p.add("browser_sort_mode", &browser_sort_mode, "name");
+	p.add("browser_sort_mode", &browser_sort_mode, "type", [](std::string v) {
+		if (v == "noop")
+		{
+			deprecated("browser_sort_mode = 'noop'",
+			           "0.10",
+			           "use 'none' instead");
+			v = "none";
+		}
+		return verbose_lexical_cast<SortMode>(v);
+	});
 	p.add("browser_sort_format", &browser_sort_format,
-	      "{%a - }{%t}|{%f} {(%l)}", [](std::string v) {
+	      "{%a - }{%t}|{%f} {%l}", [](std::string v) {
 		      return Format::parse(v, Format::Flags::Tag);
 	      });
 	p.add("song_columns_list_format", &song_columns_mode_format,
@@ -429,6 +443,7 @@ bool Configuration::read(const std::vector<std::string> &config_paths, bool igno
 	});
 	p.add("user_interface", &design, "classic");
 	p.add("data_fetching_delay", &data_fetching_delay, "yes", yes_no);
+	p.add("media_library_hide_album_dates", &media_lib_hide_album_dates, "no", yes_no);
 	p.add("media_library_primary_tag", &media_lib_primary_tag, "artist", [](std::string v) {
 			if (v == "artist")
 				return MPD_TAG_ARTIST;
@@ -457,12 +472,12 @@ bool Configuration::read(const std::vector<std::string> &config_paths, bool igno
 	p.add("default_tag_editor_pattern", &pattern, "%n - %t");
 	p.add("header_visibility", &header_visibility, "yes", yes_no);
 	p.add("statusbar_visibility", &statusbar_visibility, "yes", yes_no);
+	p.add("connected_message_on_startup", &connected_message_on_startup, "yes", yes_no);
 	p.add("titles_visibility", &titles_visibility, "yes", yes_no);
 	p.add("header_text_scrolling", &header_text_scrolling, "yes", yes_no);
 	p.add("cyclic_scrolling", &use_cyclic_scrolling, "no", yes_no);
-	p.add("lines_scrolled", &lines_scrolled, "2");
 	p.add("lyrics_fetchers", &lyrics_fetchers,
-	      "lyricwiki, azlyrics, genius, sing365, lyricsmania, metrolyrics, justsomelyrics, jahlyrics, plyrics, tekstowo, internet",
+	      "azlyrics, genius, musixmatch, sing365, metrolyrics, justsomelyrics, jahlyrics, plyrics, tekstowo, zeneszoveg, internet",
 	      list_of<LyricsFetcher_>);
 	p.add("follow_now_playing_lyrics", &now_playing_lyrics, "no", yes_no);
 	p.add("fetch_lyrics_for_current_song_in_background", &fetch_lyrics_in_background,
@@ -542,7 +557,8 @@ bool Configuration::read(const std::vector<std::string> &config_paths, bool igno
 	p.add("block_search_constraints_change_if_items_found",
 	      &block_search_constraints_change, "yes", yes_no);
 	p.add("mouse_support", &mouse_support, "yes", yes_no);
-	p.add("mouse_list_scroll_whole_page", &mouse_list_scroll_whole_page, "yes", yes_no);
+	p.add("mouse_list_scroll_whole_page", &mouse_list_scroll_whole_page, "no", yes_no);
+	p.add("lines_scrolled", &lines_scrolled, "5");
 	p.add("empty_tag_marker", &empty_tag, "<empty>");
 	p.add("tags_separator", &MPD::Song::TagsSeparator, " | ");
 	p.add("tag_editor_extended_numeration", &tag_editor_extended_numeration, "no", yes_no);

@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -93,6 +93,18 @@ void removeInvalidCharsFromFilename(std::string &filename, bool win32_compatible
 				filename.erase(filename.begin()+i);
 				--i;
 			}
+		}
+	}
+}
+
+void escapeSingleQuotes(std::string &filename)
+{
+	for (size_t i = 0; i < filename.length(); ++i)
+	{
+		if (filename[i] == '\'')
+		{
+			filename.replace(i, 1, "'\\''");
+			i += 3;
 		}
 	}
 }

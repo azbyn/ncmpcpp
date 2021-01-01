@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -32,6 +32,10 @@
 #include "window.h"
 
 namespace {
+
+// In a DirectColor setup, COLORS as returned by ncurses (via terminfo) can
+// run as high as 2^24. We only work with up to 256.
+int maxColor;
 
 namespace rl {
 
@@ -224,9 +228,9 @@ int Color::pairNumber() const
 	else if (!isDefault())
 	{
 		if (!currentBackground())
-			result = (background() + 1) % COLORS;
+			result = (background() + 1) % colorCount();
 		result *= 256;
-		result += foreground() % COLORS;
+		result += foreground() % colorCount();
 
 		assert(result < int(color_pair_map.size()));
 
@@ -385,6 +389,11 @@ void disable()
 
 }
 
+int colorCount()
+{
+  return maxColor;
+}
+
 void initScreen(bool enable_colors, bool enable_mouse)
 {
 	initscr();
@@ -392,13 +401,18 @@ void initScreen(bool enable_colors, bool enable_mouse)
 	{
 		start_color();
 		use_default_colors();
+		maxColor = COLORS;
+		if (maxColor > 256)
+		{
+			maxColor = 256;
+		}
 		color_pair_map.resize(256 * 256, 0);
 
 		// Predefine pairs for colors with transparent background, all the other
 		// ones will be dynamically registered in Color::pairNumber when they're
 		// used.
 		color_pair_counter = 1;
-		for (int fg = 0; fg < COLORS; ++fg, ++color_pair_counter)
+		for (int fg = 0; fg < colorCount(); ++fg, ++color_pair_counter)
 		{
 			init_pair(color_pair_counter, fg, -1);
 			color_pair_map[fg] = color_pair_counter;
@@ -445,12 +459,16 @@ void initScreen(bool enable_colors, bool enable_mouse)
 
 void pauseScreen()
 {
+	if (Mouse::supportEnabled)
+		Mouse::disable();
 	def_prog_mode();
 	endwin();
 }
 
 void unpauseScreen()
 {
+	if (Mouse::supportEnabled)
+		Mouse::enable();
 	refresh();
 }
 
@@ -934,6 +952,8 @@ Key::Type Window::getInputChar(int key)
 			m_mouse_event.y = (raw_y - 33) & 0xff;
 			return define_mouse_event(key);
 		}
+		case 'P': // st
+			return Key::Delete;
 		case 'Z':
 			return Key::Shift | Key::Tab;
 		case '[': // F1 to F5 in tty

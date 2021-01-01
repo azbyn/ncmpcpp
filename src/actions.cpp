@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -621,9 +621,19 @@ void SlaveScreen::run()
 	drawHeader();
 }
 
+bool VolumeUp::canBeRun()
+{
+	return Status::State::volume() >= 0;
+}
+
 void VolumeUp::run()
 {
 	Mpd.ChangeVolume(static_cast<int>(Config.volume_change_step));
+}
+
+bool VolumeDown::canBeRun()
+{
+	return Status::State::volume() >= 0;
 }
 
 void VolumeDown::run()
@@ -671,8 +681,7 @@ void DeletePlaylistItems::run()
 	if (myScreen == myPlaylist)
 	{
 		Statusbar::print("Deleting items...");
-		auto delete_fun = std::bind(&MPD::Connection::Delete, ph::_1, ph::_2);
-		deleteSelectedSongs(myPlaylist->main(), delete_fun);
+		deleteSelectedSongsFromPlaylist(myPlaylist->main());
 		Statusbar::print("Item(s) deleted");
 	}
 	else if (myScreen->isActiveWindow(myPlaylistEditor->Content))
@@ -788,10 +797,14 @@ void DeleteStoredPlaylist::run()
 	myPlaylistEditor->requestPlaylistsUpdate();
 }
 
+bool ReplaySong::canBeRun()
+{
+	return Status::State::currentSongPosition() >= 0;
+}
+
 void ReplaySong::run()
 {
-	if (Status::State::player() != MPD::psStop)
-		Mpd.Seek(Status::State::currentSongPosition(), 0);
+	Mpd.Play(Status::State::currentSongPosition());
 }
 
 void PreviousSong::run()
@@ -802,6 +815,11 @@ void PreviousSong::run()
 void NextSong::run()
 {
 	Mpd.Next();
+}
+
+bool Pause::canBeRun()
+{
+	return Status::State::player() != MPD::psStop;
 }
 
 void Pause::run()
@@ -843,6 +861,11 @@ void SavePlaylist::run()
 void Stop::run()
 {
 	Mpd.Stop();
+}
+
+void Play::run()
+{
+	Mpd.Play();
 }
 
 void ExecuteCommand::run()
@@ -1022,6 +1045,27 @@ void Add::run()
 				throw;
 		}
 	}
+}
+
+bool Load::canBeRun()
+{
+	return myScreen != myPlaylistEditor;
+}
+
+void Load::run()
+{
+	using Global::wFooter;
+
+	std::string path;
+	{
+		Statusbar::ScopedLock slock;
+		Statusbar::put() << "Load playlist: ";
+		path = wFooter->prompt();
+	}
+
+	Statusbar::put() << "Loading...";
+	wFooter->refresh();
+	Mpd.LoadPlaylist(path);
 }
 
 bool SeekForward::canBeRun()
@@ -1323,6 +1367,11 @@ void SetCrossfade::run()
 	lowerBoundCheck(crossfade, 0u);
 	Config.crossfade_time = crossfade;
 	Mpd.SetCrossfade(crossfade);
+}
+
+bool SetVolume::canBeRun()
+{
+	return Status::State::volume() >= 0;
 }
 
 void SetVolume::run()
@@ -1880,7 +1929,8 @@ void CropMainPlaylist::run()
 		confirmAction("Do you really want to crop main playlist?");
 	Statusbar::print("Cropping playlist...");
 	selectCurrentIfNoneSelected(w);
-	cropPlaylist(w, std::bind(&MPD::Connection::Delete, ph::_1, ph::_2));
+	reverseSelectionHelper(w.begin(), w.end());
+	deleteSelectedSongsFromPlaylist(w);
 	Statusbar::print("Playlist cropped");
 }
 
@@ -2198,7 +2248,7 @@ void AddRandomItems::run()
 	{
 		bool success;
 		if (rnd_type == 's')
-			success = Mpd.AddRandomSongs(number, Global::RNG);
+			success = Mpd.AddRandomSongs(number, Config.random_exclude_pattern, Global::RNG);
 		else
 			success = Mpd.AddRandomTag(tag_type, number, Global::RNG);
 		if (success)
@@ -2215,6 +2265,10 @@ void ToggleBrowserSortMode::run()
 {
 	switch (Config.browser_sort_mode)
 	{
+		case SortMode::Type:
+			Config.browser_sort_mode = SortMode::Name;
+			Statusbar::print("Sort songs by: name");
+			break;
 		case SortMode::Name:
 			Config.browser_sort_mode = SortMode::ModificationTime;
 			Statusbar::print("Sort songs by: modification time");
@@ -2224,19 +2278,20 @@ void ToggleBrowserSortMode::run()
 			Statusbar::print("Sort songs by: custom format");
 			break;
 		case SortMode::CustomFormat:
-			Config.browser_sort_mode = SortMode::NoOp;
+			Config.browser_sort_mode = SortMode::None;
 			Statusbar::print("Do not sort songs");
 			break;
-		case SortMode::NoOp:
-			Config.browser_sort_mode = SortMode::Name;
-			Statusbar::print("Sort songs by: name");
+		case SortMode::None:
+			Config.browser_sort_mode = SortMode::Type;
+			Statusbar::print("Sort songs by: type");
 	}
-	if (Config.browser_sort_mode != SortMode::NoOp)
+	if (Config.browser_sort_mode != SortMode::None)
 	{
 		size_t sort_offset = myBrowser->inRootDirectory() ? 0 : 1;
-		std::sort(myBrowser->main().begin()+sort_offset, myBrowser->main().end(),
-			LocaleBasedItemSorting(std::locale(), Config.ignore_leading_the, Config.browser_sort_mode)
-		);
+		std::stable_sort(
+			myBrowser->main().begin()+sort_offset, myBrowser->main().end(),
+			LocaleBasedItemSorting(std::locale(), Config.ignore_leading_the,
+			                       Config.browser_sort_mode));
 	}
 }
 
@@ -2734,6 +2789,7 @@ void populateActions()
 	insert_action(new Actions::NextSong());
 	insert_action(new Actions::Pause());
 	insert_action(new Actions::Stop());
+	insert_action(new Actions::Play());
 	insert_action(new Actions::ExecuteCommand());
 	insert_action(new Actions::SavePlaylist());
 	insert_action(new Actions::MoveSortOrderUp());
@@ -2742,6 +2798,7 @@ void populateActions()
 	insert_action(new Actions::MoveSelectedItemsDown());
 	insert_action(new Actions::MoveSelectedItemsTo());
 	insert_action(new Actions::Add());
+	insert_action(new Actions::Load());
 	insert_action(new Actions::PlayItem());
 	insert_action(new Actions::SeekForward());
 	insert_action(new Actions::SeekBackward());

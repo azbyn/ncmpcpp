@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -103,12 +103,12 @@ int main(int argc, char **argv)
 	// always execute these commands, even if ncmpcpp use exit function
 	atexit(do_at_exit);
 	
-	// redirect std::cerr output to ~/.ncmpcpp/error.log file
+	// redirect std::cerr output to the error.log file
 	errorlog.open((Config.ncmpcpp_directory + "error.log").c_str(), std::ios::app);
 	cerr_buffer = std::cerr.rdbuf();
 	std::cerr.rdbuf(errorlog.rdbuf());
 	
-	sigignore(SIGPIPE);
+	signal(SIGPIPE, SIG_IGN);
 	signal(SIGWINCH, sighandler);
 
 	Mpd.setNoidleCallback(Status::update);

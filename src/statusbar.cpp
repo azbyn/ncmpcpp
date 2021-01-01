@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -172,14 +172,17 @@ void Statusbar::print(int delay, const std::string &message)
 {
 	if (statusbar_allow_unlock)
 	{
-		statusbar_lock_time = Global::Timer;
-		statusbar_lock_delay = boost::posix_time::seconds(delay);
-		if (Config.statusbar_visibility)
-			statusbar_block_update = true;
-		else
-			progressbar_block_update = true;
-		wFooter->goToXY(0, Config.statusbar_visibility);
-		*wFooter << message << NC::TermManip::ClearToEOL;
+        if(delay)
+        {
+            statusbar_lock_time = Global::Timer;
+            statusbar_lock_delay = boost::posix_time::seconds(delay);
+            if (Config.statusbar_visibility)
+                statusbar_block_update = true;
+            else
+                progressbar_block_update = true;
+            wFooter->goToXY(0, Config.statusbar_visibility);
+            *wFooter << message << NC::TermManip::ClearToEOL;
+        }
 		wFooter->refresh();
 	}
 }

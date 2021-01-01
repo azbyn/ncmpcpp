@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Andrzej Rybczak                            *
- *   electricityispower@gmail.com                                          *
+ *   Copyright (C) 2008-2021 by Andrzej Rybczak                            *
+ *   andrzej@rybczak.net                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -59,5 +59,7 @@ std::string getSharedDirectory(const std::string &dir1, const std::string &dir2)
 std::string getEnclosedString(const std::string &s, char a, char b, size_t *pos);
 
 void removeInvalidCharsFromFilename(std::string &filename, bool win32_compatible);
+
+void escapeSingleQuotes(std::string &filename);
 
 #endif // NCMPCPP_UTILITY_STRING_H
